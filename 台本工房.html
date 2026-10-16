@@ -1,0 +1,296 @@
+<title>掛け合い台本工房</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: 1カラムの作業台。上=材料、中=台本の行リスト、下に固定の書き出しバー */
+:root{
+  --bg:#f3f5f1; --panel:#ffffff; --fg:#1f2a22; --muted:#66746a; --line:#d9e0d8;
+  --accent:#3f8a4f; --accent-ink:#ffffff; --q:#3f6fa8; --q-soft:#e6eef8; --a-soft:#e8f3e8; --warn:#a8642a;
+  --display:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",system-ui,sans-serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141a16; --panel:#1c241f; --fg:#e4ebe5; --muted:#9aa89e; --line:#2f3a33;
+  --accent:#6cbf7c; --accent-ink:#0f1a12; --q:#8fb4e6; --q-soft:#1d2a3a; --a-soft:#1e2f22; --warn:#e0a46a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a16; --panel:#1c241f; --fg:#e4ebe5; --muted:#9aa89e; --line:#2f3a33;
+  --accent:#6cbf7c; --accent-ink:#0f1a12; --q:#8fb4e6; --q-soft:#1d2a3a; --a-soft:#1e2f22; --warn:#e0a46a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--display);font-weight:800;font-size:1.6rem;margin:0;text-wrap:balance}
+.lead{margin:4px 0 0;color:var(--muted)}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.steps span{font-size:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--muted)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{font-family:var(--display);font-size:1.05rem;margin:0}
+label{font-size:.85rem;color:var(--muted);display:block;margin-bottom:4px}
+input[type=text],textarea,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+textarea{resize:vertical}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:520px){.row2{grid-template-columns:1fr 1fr}.row2 .len{grid-column:1/-1}}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:8px 14px}
+button.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+.status{font-size:.85rem;color:var(--muted)}
+.status.err{color:var(--warn)}
+.meta{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.meta b{color:var(--fg)}
+.example{font-size:.8rem;color:var(--warn)}
+#lines{display:flex;flex-direction:column;gap:8px}
+.ln{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:8px;border-radius:12px}
+.ln.Q{background:var(--q-soft)}
+.ln.A{background:var(--a-soft)}
+.who{font-family:var(--display);font-size:.8rem;border:none;border-radius:8px;padding:4px 8px;min-width:5.5em;text-align:center;color:var(--accent-ink);background:var(--accent)}
+.ln.Q .who{background:var(--q)}
+.ln textarea{background:var(--panel);min-height:2.4em;padding:6px 8px;min-width:0}
+.ops{display:flex;flex-direction:column;gap:4px}
+.ops button{padding:2px 8px;font-size:.8rem}
+.rec{font-size:.7rem;color:var(--q);display:block;text-align:center;margin-top:2px}
+.add{align-self:center;font-size:.8rem;padding:2px 12px;border-style:dashed;color:var(--muted)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-top:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar .in{max-width:760px;margin:0 auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.howto{font-size:.9rem;color:var(--muted);margin:0;padding-left:1.2em}
+.howto li{margin:2px 0}
+code{font-size:.85em;background:var(--bg);padding:0 4px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>掛け合い台本工房</h1>
+    <p class="lead">会話を貼る → 台本にする → 手で直す → 保存して「動画工房」へ。</p>
+    <div class="steps"><span>材料を貼る</span><span>台本にする</span><span>直す・足す・削る</span><span>保存して動画に</span></div>
+  </header>
+
+  <section>
+    <h2>材料</h2>
+    <div>
+      <label for="theme">テーマ</label>
+      <input type="text" id="theme" placeholder="例：AIで1万ドル稼ぐってほんま？">
+    </div>
+    <div>
+      <label for="src">会話（Claudeとのやりとりをそのまま貼る）</label>
+      <textarea id="src" rows="7" placeholder="ここに会話を貼り付け"></textarea>
+    </div>
+    <div class="row2">
+      <div><label for="nameQ">聞く役</label><input type="text" id="nameQ" value="ととまる"></div>
+      <div><label for="nameA">答える役</label><input type="text" id="nameA" value="解説"></div>
+      <div class="len"><label for="len">長さ</label>
+        <select id="len">
+          <option value="20">短め（約2分）</option>
+          <option value="40" selected>普通（約5分）</option>
+          <option value="70">長め（約8分）</option>
+        </select></div>
+    </div>
+    <div class="btns">
+      <button class="main" id="make">台本にする</button>
+      <button id="stop" hidden>止める</button>
+      <span class="status" id="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="btns" style="justify-content:space-between">
+      <h2>台本</h2>
+      <button id="longer">AIでふくらませる</button>
+    </div>
+    <div class="meta">
+      <span>セリフ <b id="mCount">0</b> 行</span>
+      <span>長さの目安 <b id="mTime">0:00</b></span>
+      <span>自分で録音 <b id="mRec">0</b> 行</span>
+    </div>
+    <p class="example" id="exNote" hidden>いま並んでるのは見本や。会話を貼って「台本にする」を押したら入れ替わる。</p>
+    <div id="lines"></div>
+  </section>
+
+  <section>
+    <h2>動画にするには</h2>
+    <ol class="howto">
+      <li>下の「台本を保存」を押す（ダウンロードに入る）</li>
+      <li>パソコンの「動画工房」フォルダで「動画を作る」をダブルクリック</li>
+      <li>ダウンロードの新しい台本を勝手に取り込んで、動画ができる</li>
+    </ol>
+  </section>
+</div>
+
+<div class="bar"><div class="in">
+  <button class="main" id="saveScript">台本を保存</button>
+  <button id="copyScript">台本をコピー</button>
+  <span class="status" id="barStatus"></span>
+</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const EXAMPLE=[
+ {who:"A",text:"今日のテーマは「AIで1万ドル稼げるのか」です。"},
+ {who:"Q",text:"AIに任せといたら勝手に稼げるんちゃうの？"},
+ {who:"A",text:"それは無理です。勝手に稼げると言う教材は、売る側が儲かっているだけなんです。"},
+ {who:"Q",text:"ほな、ちゃんと稼いでる人は何してはるん？"},
+ {who:"A",text:"一番多いのは、本業の作業をAIで速くしている人です。"},
+ {who:"A",text:"次に、AIで作った物を売る人や、使い方を教える人がいます。"},
+ {who:"Q",text:"客も技術も作るもんもない俺はどうしたらええねん。"},
+ {who:"A",text:"自分が作っている物を、AIで速く作るのが一番の近道です。"},
+ {who:"A",text:"まとめると、AIはお金を生む機械ではなく、作るのを速くする道具です。"}
+];
+let lines=[], isExample=true, ctl=null, sample=null, downloads=null;
+
+function load(){
+  try{const d=JSON.parse(localStorage.getItem("kakeai")||"null");
+    if(d&&Array.isArray(d.lines)&&d.lines.length){lines=d.lines;isExample=false;
+      ["theme","src","nameQ","nameA","len"].forEach(k=>{if(d[k]!=null)$(k).value=d[k]});return;}}catch(e){}
+  lines=EXAMPLE.map(x=>({...x}));
+}
+function save(){
+  if(isExample)return;
+  try{localStorage.setItem("kakeai",JSON.stringify({lines,theme:$("theme").value,src:$("src").value,nameQ:$("nameQ").value,nameA:$("nameA").value,len:$("len").value}))}catch(e){}
+}
+const nm=w=>(w==="Q"?$("nameQ").value:$("nameA").value).trim()||(w==="Q"?"聞き手":"答え手");
+
+function render(){
+  const box=$("lines");box.textContent="";
+  const addBtn=i=>{const b=document.createElement("button");b.className="add";b.textContent="＋ ここに1行足す";
+    b.onclick=()=>{lines.splice(i,0,{who:lines[i-1]?.who==="Q"?"A":"Q",text:""});touch();render();
+      box.querySelectorAll("textarea")[i]?.focus()};return b};
+  lines.forEach((l,i)=>{
+    const d=document.createElement("div");d.className="ln "+l.who;
+    const left=document.createElement("div");
+    const w=document.createElement("button");w.className="who";w.textContent=nm(l.who);w.title="押すと役を入れ替え";
+    w.onclick=()=>{l.who=l.who==="Q"?"A":"Q";touch();render()};
+    left.append(w);
+    if(l.who==="Q"){const r=document.createElement("span");r.className="rec";r.textContent="録音 #"+recNo(i);left.append(r)}
+    const t=document.createElement("textarea");t.id="ln"+i;t.value=l.text;t.rows=Math.max(1,Math.ceil(l.text.length/28));
+    t.setAttribute("aria-label",nm(l.who)+"のセリフ");
+    t.oninput=()=>{l.text=t.value;touch(false)};
+    const ops=document.createElement("div");ops.className="ops";
+    [["↑",()=>{if(i>0){[lines[i-1],lines[i]]=[lines[i],lines[i-1]]}}],
+     ["↓",()=>{if(i<lines.length-1){[lines[i+1],lines[i]]=[lines[i],lines[i+1]]}}],
+     ["消す",()=>{lines.splice(i,1)}]].forEach(([s,f])=>{const b=document.createElement("button");b.textContent=s;
+       b.setAttribute("aria-label",s==="消す"?"この行を消す":s==="↑"?"上へ":"下へ");b.onclick=()=>{f();touch();render()};ops.append(b)});
+    d.append(left,t,ops);box.append(d);
+    box.append(addBtn(i+1));
+  });
+  if(!lines.length)box.append(addBtn(0));
+  $("exNote").hidden=!isExample;
+  meta();
+}
+function recNo(i){let n=0;for(let k=0;k<=i;k++)if(lines[k].who==="Q")n++;return n}
+function meta(){
+  const chars=lines.reduce((s,l)=>s+l.text.length,0);
+  const sec=Math.round(chars/6.5+lines.length*0.5);
+  $("mCount").textContent=lines.length;
+  $("mTime").textContent=Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0");
+  $("mRec").textContent=lines.filter(l=>l.who==="Q").length;
+}
+function touch(rerender=true){isExample=false;save();meta()}
+
+function esc(s){return s.replace(/\\/g,"＼").replace(/「/g,"\\「").replace(/」/g,"\\」")}
+function scriptText(){
+  const head="# "+($("theme").value.trim()||"掛け合い台本")+"\n";
+  return head+lines.filter(l=>l.text.trim()).map(l=>nm(l.who)+"「"+esc(l.text.trim())+"」").join("\n")+"\n";
+}
+function recText(){
+  let n=0;const out=["録音リスト："+($("theme").value.trim()||"掛け合い台本"),""];
+  lines.forEach((l,i)=>{if(l.who!=="Q"||!l.text.trim())return;n++;
+    const prev=lines[i-1];if(prev&&prev.who==="A")out.push("（直前："+nm("A")+"「"+prev.text.trim()+"」）");
+    out.push("#"+n+"  "+l.text.trim(),"")});
+  return out.join("\n");
+}
+
+function setStatus(el,msg,err){el.textContent=msg;el.classList.toggle("err",!!err)}
+const errMsg=c=>({not_granted:"Claudeの使用が許可されてへん。許可したらもう一回押して。",
+  rate_limited:"今は混んでるか、使用上限や。少し時間をおいて押して。",
+  invalid_json:"台本の形にならんかった。もう一回押してみて。",
+  prompt_too_large:"会話が長すぎる。半分くらいに分けて貼って。",
+  refused:"この内容は台本にできへんかった。会話を変えてみて。",
+  session_expired:"ログインし直してから押して。"}[c]||"うまくいかんかった。もう一回押して。");
+
+function normalize(arr){
+  if(!Array.isArray(arr))throw {code:"invalid_json"};
+  const out=arr.map(x=>({who:String(x?.who).toUpperCase()==="Q"?"Q":"A",text:String(x?.text??"").trim()})).filter(x=>x.text);
+  if(!out.length)throw {code:"invalid_json"};
+  return out;
+}
+function rules(){
+  const Q=nm("Q"),A=nm("A");
+  return `役：
+- 聞き手（who:"Q"）＝${Q}：視聴者の代わりに質問・ツッコミする役。元の会話にある聞き手の発言は、言い回し（方言・口ぐせ）をそのまま残し、短く整えるだけにする。新しく質問を作るのは最小限、口調は元の発言に合わせる。
+- 答え手（who:"A"）＝${A}：説明役。落ち着いた男性の語り口で、です・ます調。専門用語は簡単な日本語に言い換える。
+- 1セリフは60字以内。長い説明は複数行に分ける。
+- 元の会話にない数字や事実を作らない。
+出力：JSON配列のみ。各要素は {"who":"Q" または "A","text":"セリフ"}。`;
+}
+
+async function run(btn,promptText,msgBusy){
+  if(!sample){setStatus($("status"),"この画面ではAI機能が使えへん。台本は手で書けるで。",true);return}
+  ctl=new AbortController();
+  $("make").disabled=$("longer").disabled=true;$("stop").hidden=false;
+  setStatus($("status"),msgBusy);
+  try{
+    const res=await sample.json(promptText,{signal:ctl.signal,cache:false,onText:({text})=>{
+      const n=(text.match(/"who"/g)||[]).length;setStatus($("status"),"書いてる… "+n+" 行目")}});
+    lines=normalize(res);isExample=false;save();render();
+    setStatus($("status"),"できた。"+lines.length+" 行。下で直してな。");
+  }catch(e){
+    if(e?.code==="cancelled")setStatus($("status"),"止めた。");
+    else setStatus($("status"),errMsg(e?.code),true);
+  }finally{$("make").disabled=$("longer").disabled=false;$("stop").hidden=true}
+}
+
+$("make").onclick=()=>{
+  const src=$("src").value.trim();
+  if(!src){setStatus($("status"),"先に会話を貼ってな。",true);$("src").focus();return}
+  const theme=$("theme").value.trim()||"（会話から決めて）";
+  const p=`あなたはゆっくり解説動画の台本作家です。下の会話を、掛け合い動画の台本に作り直してください。
+冒頭で${nm("A")}がテーマを紹介し、最後に${nm("A")}がまとめる。
+長さはおよそ${$("len").value}行。
+${rules()}
+
+テーマ：${theme}
+
+会話：
+${src.slice(0,60000)}`;
+  run($("make"),p,"考えてる…（30秒〜1分くらい）");
+};
+$("longer").onclick=()=>{
+  if(!lines.length){setStatus($("status"),"先に台本を作ってな。",true);return}
+  const target=Math.round(lines.length*1.5);
+  const p=`下の掛け合い台本を、およそ${target}行にふくらませてください。
+既存の行は消さず、文言も変えない。間に、聞き手の素朴な疑問とその答え、具体例を足す。
+${rules()}
+
+テーマ：${$("theme").value.trim()||"（台本から読み取る）"}
+
+今の台本（JSON）：
+${JSON.stringify(lines)}`;
+  run($("longer"),p,"ふくらませてる…");
+};
+$("stop").onclick=()=>ctl?.abort();
+["nameQ","nameA"].forEach(k=>$(k).addEventListener("change",()=>{save();render()}));
+["theme","src","len"].forEach(k=>$(k).addEventListener("input",save));
+
+async function offer(filename,text){
+  const st=$("barStatus");
+  if(!downloads){setStatus(st,"ここでは保存できへん。「台本をコピー」を使って。",true);return}
+  try{await downloads.save({filename,data:text});setStatus(st,"保存した。")}
+  catch(e){setStatus(st,e?.code==="declined"?"保存をやめた。":"保存できへんかった。「台本をコピー」を使って。",e?.code!=="declined")}
+}
+const base=()=>($("theme").value.trim()||"台本").replace(/[\\/:*?"<>|]/g,"").slice(0,40);
+$("saveScript").onclick=()=>offer("台本_"+base()+".txt",scriptText());
+$("copyScript").onclick=async()=>{
+  const t=scriptText();
+  try{await navigator.clipboard.writeText(t);setStatus($("barStatus"),"コピーした。動画工房の 台本.txt をメモ帳で開いて、全部入れ替えて保存してな。")}
+  catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.append(ta);ta.select();
+    try{document.execCommand("copy");setStatus($("barStatus"),"コピーした。")}catch(_){setStatus($("barStatus"),"コピーできへんかった。",true)}ta.remove()}
+};
+
+load();render();
+(async()=>{
+  if(!window.claude?.use)return;
+  sample=await claude.use("sample");
+  downloads=await claude.use("downloads");
+  if(!sample)$("longer").title="この画面ではAI機能が使えへん";
+})();
+</script>
