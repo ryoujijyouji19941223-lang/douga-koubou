@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>録音スタジオ</title>
+<style>
+:root{
+  --bg:#141917; --panel:#1d2421; --line:#2e3833; --fg:#e8eee9; --muted:#9aa8a0;
+  --ai:#79b98a; --me:#7fa8dc; --rec:#e0584a; --rec-soft:#3a1f1c; --ok:#79b98a;
+  --font:"BIZ UDPGothic","Meiryo UI","Yu Gothic UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--font)}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 140px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:26px}
+.sub{color:var(--muted);margin:2px 0 0}
+.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 14px;font-variant-numeric:tabular-nums}
+.chip b{color:var(--ok)}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:8px 16px}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--me);outline-offset:2px}
+button.main{background:var(--rec);border-color:var(--rec);color:#fff;font-weight:700}
+button.go{background:var(--ai);border-color:var(--ai);color:#0f1a12;font-weight:700}
+button:disabled{opacity:.45;cursor:default}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;color:var(--muted)}
+.note b{color:var(--fg)}
+#msg{border-radius:12px;padding:10px 14px;background:var(--rec-soft);color:#ffd2cc}
+#list{display:flex;flex-direction:column;gap:8px}
+.ln{display:grid;grid-template-columns:7.5em 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;border:1px solid transparent;background:var(--panel)}
+.ln .who{font-weight:700;font-size:14px}
+.ln.A .who{color:var(--ai)}
+.ln.Q .who{color:var(--me)}
+.ln .txt{min-width:0}
+.ln .ops{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ln .ops button{padding:4px 10px;font-size:14px}
+.st{font-size:12px;display:block;color:var(--muted)}
+.st.ok{color:var(--ok)}
+.ln.now{border-color:var(--ai)}
+.ln.recording{border-color:var(--rec);background:var(--rec-soft)}
+@media (max-width:600px){.ln{grid-template-columns:1fr}.ln .ops{justify-content:flex-start}}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#0e1311ee;border-top:1px solid var(--line);padding:14px 16px}
+.bar .in{max-width:860px;margin:0 auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#state{flex:1;min-width:12em}
+#meter{width:160px;height:10px;background:#ffffff1a;border-radius:5px;overflow:hidden}
+#lvl{height:100%;width:0;background:var(--rec)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--rec);margin-right:6px;animation:p 1s infinite}
+@keyframes p{50%{opacity:.3}}
+pre{white-space:pre-wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13px;max-height:240px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>録音スタジオ</h1>
+    <p class="sub" id="theme">台本を読み込み中…</p>
+  </div>
+  <div class="note"><b>イヤホンをつけてな。</b> AIのセリフを聞いて、自分の番が来たら赤くなる。しゃべり終わったら <b>スペースキー</b>（か「止める」）で次へ進む。</div>
+  <div id="msg" hidden></div>
+  <div class="top">
+    <span class="chip">録った <b id="done">0</b> / <span id="total">0</span></span>
+    <button class="main" id="run">通しで録る</button>
+    <button class="go" id="build">動画を作る</button>
+  </div>
+  <div id="list"></div>
+  <pre id="log" hidden></pre>
+</div>
+<div class="bar"><div class="in">
+  <span id="state">待機中</span>
+  <div id="meter"><div id="lvl"></div></div>
+  <button id="stopBtn" disabled>止める（スペース）</button>
+  <button id="quitBtn" hidden>通しをやめる</button>
+</div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let lines = [], me = "", stream = null, analyser = null, cancel = false, running = false;
+let finishTake = null, current = null;
+
+function msg(t) { $("msg").textContent = t || ""; $("msg").hidden = !t; }
+function state(html) { $("state").innerHTML = html; }
+
+async function load() {
+  const r = await fetch("/api/script");
+  const d = await r.json();
+  if (!r.ok) { msg(d.error); return; }
+  lines = d.lines; me = d.me;
+  $("theme").textContent = d.theme + "（" + me + "のセリフを録る）";
+  render();
+}
+
+function render() {
+  const box = $("list"); box.textContent = "";
+  lines.forEach(l => {
+    const row = document.createElement("div");
+    row.className = "ln " + l.who; row.id = "ln" + l.i;
+    const who = document.createElement("div"); who.className = "who";
+    who.textContent = l.who === "Q" ? "#" + l.rec + " " + l.name : l.name;
+    if (l.who === "Q") { const s = document.createElement("span"); s.className = "st" + (l.has ? " ok" : ""); s.textContent = l.has ? "録音ずみ" : "まだ"; who.append(s); }
+    const txt = document.createElement("div"); txt.className = "txt"; txt.textContent = l.text;
+    const ops = document.createElement("div"); ops.className = "ops";
+    const b = (label, fn, title) => { const x = document.createElement("button"); x.textContent = label; if (title) x.title = title; x.onclick = fn; ops.append(x); return x; };
+    if (l.who === "A") b("▶ 聞く", () => solo(() => playAI(l)));
+    else {
+      b("● 録る", () => solo(() => recordOne(l)), "前のセリフを流してから録る");
+      if (l.has) b("▶ 自分の声", () => solo(() => playURL("/audio/rec/" + l.rec + "?t=" + Date.now())));
+      b("ここから通し", () => runFrom(l.i));
+    }
+    row.append(who, txt, ops); box.append(row);
+  });
+  const qs = lines.filter(l => l.who === "Q");
+  $("done").textContent = qs.filter(l => l.has).length; $("total").textContent = qs.length;
+}
+
+function mark(l, cls) {
+  document.querySelectorAll(".ln.now,.ln.recording").forEach(e => e.classList.remove("now", "recording"));
+  if (!l) return;
+  const el = $("ln" + l.i); el.classList.add(cls); el.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+// ---------- 再生 ----------
+function playURL(url) {
+  return new Promise((ok, ng) => {
+    const a = new Audio(url); current = a;
+    a.onended = () => { current = null; ok(); };
+    a.onerror = async () => {
+      current = null;
+      try { const r = await fetch(url); const d = await r.json(); ng(new Error(d.error)); }
+      catch (e) { ng(new Error("音を鳴らせへんかった。")); }
+    };
+    a.play().catch(e => ng(e));
+  });
+}
+async function playAI(l) {
+  mark(l, "now"); state("▶ " + l.name + " のセリフ");
+  await playURL("/audio/ai/" + l.i);
+}
+
+// ---------- 録音 ----------
+async function mic() {
+  if (stream) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+  } catch (e) { throw new Error("マイクを使わせてもらえへんかった。アドレス欄の左のマークからマイクを「許可」にしてな。"); }
+  const ac = new AudioContext(); analyser = ac.createAnalyser(); analyser.fftSize = 1024;
+  ac.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  (function tick() {
+    analyser.getFloatTimeDomainData(buf);
+    let s = 0; for (const v of buf) s += v * v;
+    const db = 20 * Math.log10(Math.sqrt(s / buf.length) + 1e-6);
+    $("lvl").style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + "%";
+    requestAnimationFrame(tick);
+  })();
+}
+
+async function take(l) {
+  await mic();
+  mark(l, "recording");
+  state('<span class="dot"></span>録音中：#' + l.rec + "「" + l.text + "」");
+  const types = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+  const type = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(stream, type ? { mimeType: type } : {});
+  const chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const stopped = new Promise(r => rec.onstop = r);
+  rec.start();
+  $("stopBtn").disabled = false;
+  await new Promise(r => finishTake = r);
+  finishTake = null; $("stopBtn").disabled = true;
+  rec.stop(); await stopped;
+  if (cancel) return false;
+  state("保存中…");
+  const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+  const r = await fetch("/api/rec/" + l.rec, { method: "POST", body: blob, headers: { "Content-Type": blob.type } });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error);
+  l.has = true;
+  return true;
+}
+
+function prevAI(i) { for (let k = i - 1; k >= 0; k--) { if (lines[k].who === "A") return lines[k]; if (lines[k].who === "Q") return null; } return null; }
+
+async function recordOne(l) {
+  const p = prevAI(l.i);
+  if (p) await playAI(p);
+  await take(l);
+}
+
+// ---------- 通し ----------
+async function runFrom(start) {
+  if (running) return;
+  if (start === undefined) {
+    const first = lines.find(l => l.who === "Q" && !l.has);
+    start = first ? first.i : 0;
+    const p = first && prevAI(first.i); if (p) start = p.i;
+  }
+  await solo(async () => {
+    $("quitBtn").hidden = false;
+    for (let i = start; i < lines.length && !cancel; i++) {
+      const l = lines[i];
+      if (l.who === "A") await playAI(l);
+      else if (l.has && i !== start) { mark(l, "now"); state("▶ 自分の声 #" + l.rec); await playURL("/audio/rec/" + l.rec + "?t=" + Date.now()); }
+      else await take(l);
+    }
+  });
+}
+
+async function solo(fn) {
+  if (running) return;
+  running = true; cancel = false; msg("");
+  document.querySelectorAll(".ops button,#run,#build").forEach(b => b.disabled = true);
+  try { await fn(); if (!cancel) state("できた。"); }
+  catch (e) { msg(e.message || String(e)); state("止まった"); }
+  finally {
+    running = false; $("quitBtn").hidden = true; mark(null);
+    if (current) { current.pause(); current = null; }
+    await load();
+    $("run").disabled = $("build").disabled = false;
+  }
+}
+
+$("run").onclick = () => runFrom();
+$("stopBtn").onclick = () => finishTake && finishTake();
+$("quitBtn").onclick = () => { cancel = true; if (current) { current.pause(); current.onended && current.onended(); } finishTake && finishTake(); };
+addEventListener("keydown", e => {
+  if (e.code === "Space" && finishTake) { e.preventDefault(); finishTake(); }
+  if (e.code === "Escape" && running) $("quitBtn").click();
+});
+$("build").onclick = async () => {
+  $("build").disabled = true; $("log").hidden = true; msg("");
+  state("動画を作ってる…（1〜2分）");
+  try {
+    const r = await fetch("/api/build", { method: "POST" });
+    const d = await r.json();
+    $("log").textContent = d.log || d.error || ""; $("log").hidden = false;
+    state(d.ok ? "動画ができた。「できた動画」フォルダを見てな。" : "動画づくりで止まった。下のメッセージを Claude に見せてな。");
+  } catch (e) { state("つながらへん。黒い画面が開いてるか確認してな。"); }
+  $("build").disabled = false;
+};
+load();
+</script>
+</body>
+</html>

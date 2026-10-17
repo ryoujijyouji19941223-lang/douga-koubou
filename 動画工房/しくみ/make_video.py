@@ -426,7 +426,7 @@ def main():
     say(f"○ できた！  {m}分{sec:02}秒")
     say(f"   {mp4}")
     say()
-    if os.name == "nt":
+    if os.name == "nt" and os.environ.get("DOUGA_NO_OPEN") != "1":
         os.startfile(OUT)  # できた動画のフォルダを開く
     left = no - own
     if left > 0:
