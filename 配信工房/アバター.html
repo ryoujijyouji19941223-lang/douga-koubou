@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>アバター</title>
+<script src="画面の設定.js"></script>
+<script src="しくみ/接続.js"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent}
+  canvas{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%}
+  /* ふつうのブラウザで開いたときだけ出る、お試し用の表示 */
+  .test body, body.test{background:#3a4a44 repeating-conic-gradient(#46574f 0 25%,#3a4a44 0 50%) 0 0/40px 40px}
+  #panel{position:fixed;left:12px;top:12px;font:14px/1.5 "Meiryo UI",sans-serif;color:#fff;background:#0009;padding:10px 12px;border-radius:10px;max-width:360px}
+  #meter{height:10px;background:#fff3;border-radius:5px;margin-top:6px;position:relative;overflow:hidden}
+  #bar{height:100%;width:0;background:#7fd38f}
+  #th{position:absolute;top:0;bottom:0;width:2px;background:#ffd36b}
+  #hint{position:fixed;left:12px;bottom:12px;font:20px/1.5 "Meiryo UI",sans-serif;color:#fff;background:#a03c2ccc;padding:8px 12px;border-radius:10px}
+  button{font:inherit;margin-top:8px;padding:4px 10px;border-radius:8px;border:0;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="900"></canvas>
+<div id="panel" hidden>
+  <b>アバターのお試し画面</b><br>
+  <span id="src">マイク：まだ</span>
+  <div id="meter"><div id="bar"></div><div id="th"></div></div>
+  <small>黄色の線を声がこえたら口が開く。合わんときは 画面の設定.js の「感度」を変える。</small><br>
+  <button id="micbtn">マイクで試す</button>
+</div>
+<div id="hint" hidden></div>
+<script>
+// ---------- 設定（画面の設定.js が無くても動くように） ----------
+var CFG = {
+  name: (typeof マイクの名前 !== "undefined") ? マイクの名前 : "マイク",
+  sens: (typeof 感度 !== "undefined") ? Number(感度) : 50,
+  bounce: (typeof 話すとゆれる !== "undefined") ? !!話すとゆれる : true,
+  pw: (typeof OBS接続パスワード !== "undefined") ? OBS接続パスワード : "",
+  port: (typeof OBS接続ポート !== "undefined") ? OBS接続ポート : 4455
+};
+var IN_OBS = !!window.obsstudio;
+var thresholdDb = -20 - Math.max(0, Math.min(100, CFG.sens)) / 100 * 40;  // 感度50 → -40dB
+
+// ---------- 絵 ----------
+var cv = document.getElementById("c"), g = cv.getContext("2d");
+var pics = {};
+function loadPic(key, file) {
+  var im = new Image();
+  im.onload = function () { pics[key] = im; fitCanvas(); };
+  im.src = "アバター/" + file;
+}
+loadPic("normal", "通常.png");
+loadPic("talk", "口開き.png");
+loadPic("blink", "まばたき.png");
+function fitCanvas() {
+  var im = pics.normal; if (!im) return;
+  var s = Math.min(800 / im.width, 900 / im.height);
+  cv.width = Math.round(im.width * s); cv.height = Math.round(im.height * s);
+}
+
+// 絵が無いときの仮キャラ（耳つきの丸いやつ）
+function drawDefault(open, blink) {
+  var W = cv.width, H = cv.height, cx = W / 2, cy = H * 0.52;
+  var fur = "#c98a55", furDark = "#8f5a33", belly = "#f3dcc0";
+  g.lineJoin = "round";
+  // 体
+  g.fillStyle = fur; g.beginPath(); g.ellipse(cx, H * 0.98, 250, 210, 0, Math.PI, 0); g.fill();
+  g.fillStyle = belly; g.beginPath(); g.ellipse(cx, H * 1.0, 140, 150, 0, Math.PI, 0); g.fill();
+  // 耳
+  [-1, 1].forEach(function (d) {
+    g.fillStyle = furDark; g.beginPath();
+    g.moveTo(cx + d * 120, cy - 150); g.lineTo(cx + d * 230, cy - 330); g.lineTo(cx + d * 250, cy - 110); g.closePath(); g.fill();
+    g.fillStyle = "#e9b48c"; g.beginPath();
+    g.moveTo(cx + d * 150, cy - 160); g.lineTo(cx + d * 222, cy - 280); g.lineTo(cx + d * 228, cy - 140); g.closePath(); g.fill();
+  });
+  // 顔
+  g.fillStyle = fur; g.beginPath(); g.ellipse(cx, cy, 250, 230, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = belly; g.beginPath(); g.ellipse(cx, cy + 85, 150, 115, 0, 0, Math.PI * 2); g.fill();
+  // 目
+  g.fillStyle = "#2a1c14";
+  [-1, 1].forEach(function (d) {
+    var ex = cx + d * 95, ey = cy - 30;
+    if (blink) { g.fillRect(ex - 30, ey - 4, 60, 9); }
+    else {
+      g.beginPath(); g.ellipse(ex, ey, 26, 34, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#fff"; g.beginPath(); g.arc(ex + 9, ey - 12, 9, 0, Math.PI * 2); g.fill(); g.fillStyle = "#2a1c14";
+    }
+  });
+  // 鼻
+  g.beginPath(); g.ellipse(cx, cy + 40, 30, 20, 0, 0, Math.PI * 2); g.fill();
+  // 口
+  g.strokeStyle = "#2a1c14"; g.lineWidth = 8;
+  if (open > 0.05) {
+    var oh = 18 + 50 * open;
+    g.fillStyle = "#5a1f1f"; g.beginPath(); g.ellipse(cx, cy + 95 + oh / 2, 48, oh, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#e46b6b"; g.beginPath(); g.ellipse(cx, cy + 95 + oh * 1.1, 30, oh * 0.45, 0, 0, Math.PI * 2); g.fill();
+  } else {
+    g.beginPath(); g.moveTo(cx, cy + 60); g.lineTo(cx, cy + 85);
+    g.moveTo(cx - 45, cy + 80); g.quadraticCurveTo(cx - 22, cy + 105, cx, cy + 85);
+    g.quadraticCurveTo(cx + 22, cy + 105, cx + 45, cy + 80); g.stroke();
+  }
+}
+
+// ---------- 声の大きさ ----------
+var levelDb = -100, lastTalk = 0, source = "none";
+function setLevelFromMul(m) { levelDb = m > 0 ? 20 * Math.log10(m) : -100; }
+
+// (1) OBS から、マイクの音量をもらう（OBS の中で動いてるとき）
+var ws = null, wsOk = false;
+function connectObs() {
+  try { ws = new WebSocket("ws://127.0.0.1:" + CFG.port); } catch (e) { return; }
+  ws.onmessage = function (ev) {
+    var msg = JSON.parse(ev.data);
+    if (msg.op === 0) {  // Hello
+      var ident = { rpcVersion: 1, eventSubscriptions: 1 << 16 };  // 音量メーターだけ
+      var au = msg.d.authentication;
+      if (au) {
+        if (!CFG.pw) { showHint("OBSの接続にパスワードが要る。配信工房の「はじめに一回だけ」をもう一回押してな。"); return; }
+        var secret = b64(sha256(utf8(CFG.pw + au.salt)));
+        ident.authentication = b64(sha256(utf8(secret + au.challenge)));
+      }
+      ws.send(JSON.stringify({ op: 1, d: ident }));
+    } else if (msg.op === 2) { wsOk = true; source = "obs"; hideHint(); updatePanel(); }
+    else if (msg.op === 5 && msg.d.eventType === "InputVolumeMeters") {
+      var inputs = msg.d.eventData.inputs, best = null, fallback = 0;
+      for (var i = 0; i < inputs.length; i++) {
+        var lv = 0, ch = inputs[i].inputLevelsMul || [];
+        for (var k = 0; k < ch.length; k++) lv = Math.max(lv, ch[k][0]);
+        if (inputs[i].inputName === CFG.name) best = lv;
+        else if (!/デスクトップ|Desktop|ゲーム|BGM/.test(inputs[i].inputName)) fallback = Math.max(fallback, lv);
+      }
+      setLevelFromMul(best !== null ? best : fallback);
+    }
+  };
+  ws.onclose = function () {
+    wsOk = false;
+    if (source === "obs") source = "none";
+    if (IN_OBS) setTimeout(connectObs, 3000);
+  };
+}
+
+// (2) ふつうのブラウザで試すときは、マイクを直接聞く
+function startMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { document.getElementById("src").textContent = "マイク：このブラウザでは使えへん"; return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+    var ac = new (window.AudioContext || window.webkitAudioContext)();
+    var an = ac.createAnalyser(); an.fftSize = 1024;
+    ac.createMediaStreamSource(st).connect(an);
+    var buf = new Float32Array(an.fftSize);
+    source = "mic"; updatePanel();
+    (function tick() {
+      an.getFloatTimeDomainData(buf);
+      var s = 0; for (var i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      setLevelFromMul(Math.sqrt(s / buf.length));
+      requestAnimationFrame(tick);
+    })();
+  }).catch(function () { document.getElementById("src").textContent = "マイク：使わせてもらえへんかった"; });
+}
+
+// ---------- 表示 ----------
+var hintTimer = null;
+function showHint(t) {
+  var h = document.getElementById("hint"); h.textContent = t; h.hidden = false;
+  if (IN_OBS) { clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, 20000); }  // 配信に映り続けへんように
+}
+function hideHint() { document.getElementById("hint").hidden = true; }
+function updatePanel() {
+  document.getElementById("src").textContent = "マイク：" + (source === "obs" ? "OBSから受け取り中" : source === "mic" ? "このパソコンのマイク" : "まだ");
+}
+
+if (!IN_OBS) {
+  document.body.classList.add("test");
+  document.getElementById("panel").hidden = false;
+  document.getElementById("micbtn").onclick = startMic;
+  document.getElementById("th").style.left = ((thresholdDb + 70) / 70 * 100) + "%";
+}
+connectObs();
+if (IN_OBS) setTimeout(function () {
+  if (!wsOk) showHint("OBSとつながってへん。OBSの「ツール」→「WebSocketサーバー設定」で「有効にする」にチェックしてな。");
+}, 6000);
+
+var nextBlink = performance.now() + 3000, blinkUntil = 0, open = 0;
+function frame(t) {
+  var talking = levelDb > thresholdDb;
+  if (talking) lastTalk = t;
+  var target = (t - lastTalk < 130) ? Math.min(1, (levelDb - thresholdDb) / 18 + 0.35) : 0;
+  open += (target - open) * 0.45;
+  if (t > nextBlink) { blinkUntil = t + 120; nextBlink = t + 2500 + Math.random() * 3500; }
+  var blink = t < blinkUntil;
+
+  g.clearRect(0, 0, cv.width, cv.height);
+  var bob = (CFG.bounce && open > 0.05) ? Math.abs(Math.sin(t / 90)) * -14 : 0;
+  g.save(); g.translate(0, bob);
+  if (pics.normal) {
+    var im = (open > 0.05 && pics.talk) ? pics.talk : (blink && pics.blink && !(open > 0.05)) ? pics.blink : pics.normal;
+    g.drawImage(im, 0, 0, cv.width, cv.height);
+  } else {
+    drawDefault(open, blink);
+  }
+  g.restore();
+
+  if (!IN_OBS) {
+    document.getElementById("bar").style.width = Math.max(0, (levelDb + 70) / 70 * 100) + "%";
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- 小さな道具（パスワードの計算用） ----------
+function utf8(s) { return new TextEncoder().encode(s); }
+function b64(bytes) { var s = ""; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+function sha256(msg) {
+  var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var l = msg.length, nb = ((l + 9 + 63) >> 6) << 6, m = new Uint8Array(nb);
+  m.set(msg); m[l] = 0x80;
+  var bits = l * 8; for (var i = 0; i < 4; i++) m[nb - 1 - i] = (bits >>> (8 * i)) & 0xff;
+  var w = new Uint32Array(64);
+  for (var o = 0; o < nb; o += 64) {
+    for (i = 0; i < 16; i++) w[i] = (m[o + 4 * i] << 24) | (m[o + 4 * i + 1] << 16) | (m[o + 4 * i + 2] << 8) | m[o + 4 * i + 3];
+    for (i = 16; i < 64; i++) {
+      var x = w[i - 15], y = w[i - 2];
+      var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], gg = H[6], h = H[7];
+    for (i = 0; i < 64; i++) {
+      var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      var t1 = (h + S1 + ((e & f) ^ (~e & gg)) + K[i] + w[i]) | 0;
+      var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      var t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = gg; gg = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + gg) | 0; H[7] = (H[7] + h) | 0;
+  }
+  var out = new Uint8Array(32);
+  for (i = 0; i < 8; i++) { out[4 * i] = H[i] >>> 24; out[4 * i + 1] = (H[i] >>> 16) & 255; out[4 * i + 2] = (H[i] >>> 8) & 255; out[4 * i + 3] = H[i] & 255; }
+  return out;
+}
+</script>
+</body>
+</html>

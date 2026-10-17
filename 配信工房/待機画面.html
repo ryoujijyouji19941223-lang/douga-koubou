@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>待機画面</title>
+<script src="画面の設定.js"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#17221e;color:#fff;font-family:"BIZ UDPGothic","Meiryo UI","Yu Gothic UI",sans-serif}
+  canvas{position:fixed;inset:0;width:100%;height:100%}
+  .box{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;text-align:center}
+  h1{margin:0;font-size:120px;font-weight:800;letter-spacing:.04em;text-shadow:0 6px 0 #0b1210}
+  #clock{font-size:56px;opacity:.75;font-variant-numeric:tabular-nums}
+  #dots span{display:inline-block;width:22px;height:22px;margin:0 10px;border-radius:50%;background:#7fd38f;animation:b 1.2s infinite ease-in-out}
+  #dots span:nth-child(2){animation-delay:.2s}#dots span:nth-child(3){animation-delay:.4s}
+  @keyframes b{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-26px);opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="box">
+  <h1 id="msg"></h1>
+  <div id="dots"><span></span><span></span><span></span></div>
+  <div id="clock"></div>
+</div>
+<script>
+var MODE = "wait";
+var text = MODE === "end"
+  ? ((typeof おわりの文字 !== "undefined") ? おわりの文字 : "見てくれてありがとう！またな")
+  : ((typeof 待機中の文字 !== "undefined") ? 待機中の文字 : "もうすぐ始まるで");
+document.getElementById("msg").textContent = text;
+if (MODE === "end") document.getElementById("dots").hidden = true;
+function clock(){var d=new Date();document.getElementById("clock").textContent=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");}
+clock(); setInterval(clock, 5000);
+// 背景：ゆっくり流れる丸
+var c=document.getElementById("c"),g=c.getContext("2d"),P=[];
+function size(){c.width=innerWidth;c.height=innerHeight;}
+size(); addEventListener("resize",size);
+for(var i=0;i<26;i++)P.push({x:Math.random(),y:Math.random(),r:30+Math.random()*120,s:0.00004+Math.random()*0.00012});
+(function f(){g.clearRect(0,0,c.width,c.height);
+  P.forEach(function(p){p.y-=p.s*16;if(p.y<-0.2)p.y=1.2;
+    g.fillStyle="rgba(127,211,143,0.06)";g.beginPath();g.arc(p.x*c.width,p.y*c.height,p.r,0,7);g.fill();});
+  requestAnimationFrame(f);})();
+</script>
+</body>
+</html>
